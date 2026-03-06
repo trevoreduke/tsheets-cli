@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "tsheets-cli"
 version = "1.0.0"
 description = "CLI tool for TSheets/QuickBooks Time REST API"
-readme = "USAGE.md"
+readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 dependencies = [
