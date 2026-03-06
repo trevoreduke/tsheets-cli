@@ -9,7 +9,7 @@ import typer
 
 from rich.console import Console
 
-from tsheets_cli.api import api_get, api_post, api_put
+from tsheets_cli.api import api_get, api_post, api_put, api_delete
 from tsheets_cli.output import console, format_duration, print_json, print_table
 from tsheets_cli.resolve import resolve_jobcode, resolve_user
 
@@ -400,7 +400,7 @@ def whosin(
 
     [dim]Example:  tsheets whosin[/]
     """
-    data = api_get("/reports/current_totals")
+    data = api_post("/reports/current_totals", {"data": {}})
 
     if json_output:
         print_json(data)

@@ -49,7 +49,7 @@ def list_users(
             str(uid),
             full_name,
             user.get("email", "-"),
-            user.get("group_id", "-") and str(user.get("group_id", "-")),
+            str(user.get("group_id", 0) or "-"),
             "Active" if user.get("active") else "Inactive",
         ])
 

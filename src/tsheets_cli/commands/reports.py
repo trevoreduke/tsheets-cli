@@ -6,7 +6,7 @@ from typing import Optional
 
 import typer
 
-from tsheets_cli.api import api_get
+from tsheets_cli.api import api_get, api_post
 from tsheets_cli.output import console, format_duration, print_json, print_table
 from tsheets_cli.resolve import resolve_project, resolve_user
 
@@ -70,11 +70,11 @@ def payroll_report(
         tsheets reports payroll --start 2026-02-24 --end 2026-03-02
         tsheets reports payroll --start 2026-02-24 --end 2026-03-02 --user "Jane Smith"
     """
-    params: dict = {"start_date": start, "end_date": end}
+    payload: dict = {"data": {"start_date": start, "end_date": end}}
     if user:
-        params["user_ids"] = str(resolve_user(user))
+        payload["data"]["user_ids"] = [resolve_user(user)]
 
-    data = api_get("/reports/payroll", params=params)
+    data = api_post("/reports/payroll", payload)
 
     if json_output:
         print_json(data)
@@ -168,11 +168,11 @@ def current_totals(
         tsheets reports totals --user "Jane Smith"
         tsheets reports totals --on-the-clock
     """
-    params: dict = {}
+    payload: dict = {"data": {}}
     if user:
-        params["user_ids"] = str(resolve_user(user))
+        payload["data"]["user_ids"] = [resolve_user(user)]
 
-    data = api_get("/reports/current_totals", params=params)
+    data = api_post("/reports/current_totals", payload)
 
     if json_output:
         print_json(data)
@@ -258,12 +258,12 @@ def project_estimate(
         tsheets reports project-estimate
         tsheets reports project-estimate --project "Website Redesign"
     """
-    params: dict = {}
+    payload: dict = {"data": {}}
     if project:
         project_id = resolve_project(project)
-        params["project_ids"] = str(project_id)
+        payload["data"]["project_ids"] = [project_id]
 
-    data = api_get("/reports/project_estimate", params=params)
+    data = api_post("/reports/project_estimate", payload)
 
     if json_output:
         print_json(data)
@@ -319,11 +319,11 @@ def current_all(
     shift duration, day total, and pay period totals. More detailed than
     'totals' — includes the actual timesheet entry data.
     """
-    params: dict = {}
+    payload: dict = {"data": {}}
     if user:
-        params["user_ids"] = str(resolve_user(user))
+        payload["data"]["user_ids"] = [resolve_user(user)]
 
-    data = api_get("/reports/current_all", params=params)
+    data = api_post("/reports/current_all", payload)
 
     if json_output:
         print_json(data)
@@ -407,18 +407,18 @@ def project_report(
         tsheets reports project --project "Office Build-Out" --start 2026-02-01 --end 2026-02-28
         tsheets reports project --user "Jane Smith" --start 2026-03-01 --end 2026-03-06
     """
-    params: dict = {}
+    payload: dict = {"data": {}}
     if project:
         project_id = resolve_project(project)
-        params["project_ids"] = str(project_id)
+        payload["data"]["project_ids"] = [project_id]
     if start:
-        params["start_date"] = start
+        payload["data"]["start_date"] = start
     if end:
-        params["end_date"] = end
+        payload["data"]["end_date"] = end
     if user:
-        params["user_ids"] = str(resolve_user(user))
+        payload["data"]["user_ids"] = [resolve_user(user)]
 
-    data = api_get("/reports/project", params=params)
+    data = api_post("/reports/project", payload)
 
     if json_output:
         print_json(data)
