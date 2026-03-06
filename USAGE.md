@@ -8,7 +8,7 @@ A command-line tool for TSheets / QuickBooks Time. Two layers: **shortcut comman
 
 ```bash
 # Install from git
-pip install git+https://github.com/thomasduke/tsheets-cli.git
+pip install git+https://github.com/trevoreduke/tsheets-cli.git
 
 # Set your API token (add to ~/.bashrc or ~/.zshrc)
 export TSHEETS_API_TOKEN="S.abc123..."
