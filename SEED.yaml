@@ -1,0 +1,196 @@
+goal: >
+  Build a Python CLI tool ("tsheets") for the TSheets/QuickBooks Time REST API.
+  Two-layer UX: raw API subcommands mirroring TSheets endpoints, plus shortcut
+  commands for common workflows. Includes a one-pager instruction manual with
+  real-data command/output examples. Team tool distributed via pip install from git.
+
+task_type: code
+
+location: projects/tsheets-cli/
+
+constraints:
+  - Python 3.11+
+  - Typer CLI framework with Rich for table output
+  - Auth via TSHEETS_API_TOKEN environment variable (shared company token)
+  - Base URL: https://rest.tsheets.com/api/v1
+  - Bearer token authentication on all requests
+  - Standalone — no dependency on the TSheets MCP server at runtime
+  - Command name: "tsheets" (entry point)
+  - Default output: human-readable Rich tables; --json flag for machine output
+  - Name resolution: accept employee/jobcode/project names instead of numeric IDs
+  - Distribution: pip install from git repo (pyproject.toml with console_scripts entry point)
+  - No external database or caching layer
+
+api_scope:
+  existing_parity:
+    - get_current_user: Retrieve authenticated user profile
+    - get_timesheets: List timesheets with date/user/jobcode filters
+    - create_timesheet: Create a time entry
+    - get_jobcodes: List all jobcodes (projects/tasks)
+    - create_jobcode: Create a new jobcode
+    - get_users: List all users
+    - get_projects: List all projects
+    - get_reports_payroll: Payroll report for date range
+
+  new_endpoints:
+    - pto_requests: List, create, approve/deny time-off requests
+    - pto_entries: View individual time-off date entries
+    - clock_in_out: Start/stop timesheets (active timers)
+    - geolocations: Retrieve GPS coordinates from mobile clock-ins
+    - geofence_configs: View geofence boundary configurations
+    - reports_current_totals: Current period totals
+    - reports_project_estimates: Project estimate vs actual
+    - reports_project_details: Detailed project time breakdown
+
+command_structure:
+  # Layer 1: Raw API subcommands
+  api_commands:
+    - tsheets me                                          # current user
+    - tsheets users list                                  # list users
+    - tsheets timesheets list --start DATE --end DATE     # list timesheets
+    - tsheets timesheets create --user NAME --jobcode NAME --start DATETIME --end DATETIME
+    - tsheets jobcodes list                               # list jobcodes
+    - tsheets jobcodes create --name NAME [--parent NAME] [--billable]
+    - tsheets projects list                               # list projects
+    - tsheets reports payroll --start DATE --end DATE     # payroll report
+    - tsheets reports totals                              # current totals
+    - tsheets reports project-estimate --project NAME     # project estimate
+    - tsheets reports project-detail --project NAME       # project detail
+    - tsheets pto list [--user NAME] [--status pending|approved|denied]
+    - tsheets pto request --start DATE --end DATE --notes TEXT
+    - tsheets geo list --user NAME --start DATE --end DATE
+    - tsheets geofences list
+
+  # Layer 2: Shortcut commands
+  shortcuts:
+    - tsheets clock-in --jobcode NAME [--notes TEXT]    # start a timer
+    - tsheets clock-out                                  # stop active timer
+    - tsheets today [--user NAME]                        # my hours today
+    - tsheets week [--user NAME]                         # my hours this week
+    - tsheets whosin                                     # who is currently clocked in
+
+acceptance_criteria:
+  - All 8 existing MCP operations accessible via CLI subcommands
+  - PTO request listing and creation works
+  - Clock-in starts an active timer; clock-out stops it
+  - Geolocation data retrievable by user and date range
+  - All 4 report types generate correct output
+  - Name resolution: "tsheets timesheets list --user 'Jane Doe'" resolves name to user_id
+  - Name resolution: "--jobcode 'Admin'" resolves name to jobcode_id
+  - --json flag outputs valid JSON on every command
+  - --help on any command/subcommand produces useful documentation
+  - Auth failure produces clear error message with fix instructions
+  - Network errors handled gracefully (timeout, DNS, 5xx)
+  - pip install from git repo creates working "tsheets" command
+  - One-pager instruction manual (USAGE.md) with real-data examples of commands AND outputs
+
+deliverables:
+  code:
+    - pyproject.toml (with console_scripts entry point, dependencies)
+    - src/tsheets_cli/__init__.py
+    - src/tsheets_cli/main.py (Typer app, top-level command groups)
+    - src/tsheets_cli/api.py (TSheets API client, auth, request handling)
+    - src/tsheets_cli/commands/users.py
+    - src/tsheets_cli/commands/timesheets.py
+    - src/tsheets_cli/commands/jobcodes.py
+    - src/tsheets_cli/commands/projects.py
+    - src/tsheets_cli/commands/reports.py
+    - src/tsheets_cli/commands/pto.py
+    - src/tsheets_cli/commands/geo.py
+    - src/tsheets_cli/commands/shortcuts.py (clock-in, clock-out, today, week, whosin)
+    - src/tsheets_cli/resolve.py (name-to-ID resolution for users, jobcodes, projects)
+    - src/tsheets_cli/output.py (Rich table formatting + JSON output)
+
+  documentation:
+    - USAGE.md: >
+        One-pager instruction manual. Must include:
+        1. Installation (pip install from git)
+        2. Configuration (TSHEETS_API_TOKEN)
+        3. Every command with a realistic example AND its terminal output
+        4. Use commercial real estate company context for sample data
+           (employee names, property-related jobcodes, realistic hours)
+        5. Both table output and --json output examples
+        6. Shortcut command examples with output
+        7. Error message examples (bad token, network error)
+
+ontology_schema:
+  name: TSheetsCLI
+  description: Domain model for CLI interactions with the TSheets time-tracking API
+  fields:
+    - name: user
+      type: object
+      description: "TSheets user: id, name, email, group, active status"
+    - name: timesheet
+      type: object
+      description: "Time entry: id, user_id, jobcode_id, start, end, duration, notes, on_the_clock"
+    - name: jobcode
+      type: object
+      description: "Job/task code: id, name, parent_id, billable, short_code, active"
+    - name: project
+      type: object
+      description: "Project: id, name, description, status"
+    - name: pto_request
+      type: object
+      description: "PTO request: id, user_id, status, start_date, end_date, notes, entries"
+    - name: geolocation
+      type: object
+      description: "GPS fix: id, user_id, latitude, longitude, accuracy, altitude, timestamp"
+    - name: geofence
+      type: object
+      description: "Geofence boundary: id, name, latitude, longitude, radius, enabled"
+    - name: payroll_report
+      type: object
+      description: "Payroll summary: user_id, total_hours, overtime, pto_hours, date_range"
+    - name: api_client
+      type: object
+      description: "HTTP client config: base_url, token, timeout, retry settings"
+
+evaluation_principles:
+  - name: api_parity
+    description: CLI covers all 8 existing MCP operations plus new endpoints
+    weight: 0.95
+  - name: name_resolution
+    description: Users can reference entities by name, not just numeric IDs
+    weight: 0.9
+  - name: usability
+    description: Intuitive subcommand structure, clear help text, shortcut commands
+    weight: 0.85
+  - name: output_quality
+    description: Clean Rich tables for humans, valid JSON for scripts
+    weight: 0.8
+  - name: error_handling
+    description: Graceful failures with actionable error messages
+    weight: 0.75
+  - name: documentation
+    description: One-pager with real-data examples of every command and its output
+    weight: 0.9
+  - name: installability
+    description: pip install from git works out of the box
+    weight: 0.7
+  - name: code_quality
+    description: Clean Python, consistent patterns, type hints throughout
+    weight: 0.6
+
+exit_conditions:
+  - name: all_commands_work
+    description: Every listed command executes successfully against the live API
+    criteria: Manual test of each command returns expected data format
+  - name: name_resolution_works
+    description: Name-based lookups resolve correctly
+    criteria: "tsheets timesheets list --user 'Jane Doe'" resolves to correct user_id
+  - name: shortcuts_functional
+    description: All 5 shortcut commands work
+    criteria: clock-in, clock-out, today, week, whosin produce correct results
+  - name: one_pager_complete
+    description: USAGE.md has every command with realistic example output
+    criteria: Document covers install, config, all commands, output samples, error cases
+  - name: pip_installable
+    description: pip install from git creates working tsheets command
+    criteria: "pip install git+<repo> && tsheets --help" works
+
+metadata:
+  seed_id: seed_a628805e49f5
+  version: 1.0.0
+  created_at: "2026-03-06T14:50:07Z"
+  ambiguity_score: 0.15
+  interview_id: interview_20260306_141359
