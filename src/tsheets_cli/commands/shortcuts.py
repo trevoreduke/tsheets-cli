@@ -454,6 +454,8 @@ def payroll(
     end: Optional[str] = typer.Option(None, "--end", "-e", help="End date (YYYY-MM-DD, default: end of last week)"),
     user: Optional[str] = typer.Option(None, "--user", "-u", help="User name or ID"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    csv_output: bool = typer.Option(False, "--csv", help="Output as CSV"),
+    output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Write CSV to file"),
 ) -> None:
     """Quick payroll report (defaults to last complete week).
 
@@ -462,8 +464,8 @@ def payroll(
 
     Examples:
         tsheets payroll
-        tsheets payroll --start 2026-02-24 --end 2026-03-02
-        tsheets payroll --user "Jane Smith"
+        tsheets payroll --csv
+        tsheets payroll -o payroll.csv
     """
     from tsheets_cli.commands.reports import payroll_report
 
@@ -478,4 +480,4 @@ def payroll(
         start = start or last_monday.strftime("%Y-%m-%d")
         end = end or last_sunday.strftime("%Y-%m-%d")
 
-    payroll_report(start=start, end=end, user=user, json_output=json_output)
+    payroll_report(start=start, end=end, user=user, json_output=json_output, csv_output=csv_output, output_file=output_file)

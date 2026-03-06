@@ -7,7 +7,7 @@ from typing import Optional
 import typer
 
 from tsheets_cli.api import api_get, api_post
-from tsheets_cli.output import console, format_duration, print_json, print_table
+from tsheets_cli.output import console, format_duration, print_csv, print_json, print_table
 from tsheets_cli.resolve import resolve_project, resolve_user
 
 app = typer.Typer(
@@ -59,6 +59,8 @@ def payroll_report(
     end: str = typer.Option(..., "--end", help="End date (YYYY-MM-DD)"),
     user: Optional[str] = typer.Option(None, "--user", help="User name or ID"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    csv_output: bool = typer.Option(False, "--csv", help="Output as CSV"),
+    output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Write CSV to file"),
 ) -> None:
     """Get payroll report for a date range.
 
@@ -68,7 +70,8 @@ def payroll_report(
 
     Examples:
         tsheets reports payroll --start 2026-02-24 --end 2026-03-02
-        tsheets reports payroll --start 2026-02-24 --end 2026-03-02 --user "Jane Smith"
+        tsheets reports payroll --start 2026-02-24 --end 2026-03-02 --csv
+        tsheets reports payroll --start 2026-02-24 --end 2026-03-02 -o payroll.csv
     """
     payload: dict = {"data": {"start_date": start, "end_date": end}}
     if user:
@@ -137,18 +140,20 @@ def payroll_report(
             f"[bold]{format_duration(grand_totals['total_work_seconds'])}[/]",
         ])
 
-    print_table(
-        f"Payroll Report ({start} to {end})",
-        [
-            ("Employee", "bold"),
-            ("Regular", "green"),
-            ("Overtime", "yellow"),
-            ("Double Time", "red"),
-            ("PTO", "blue"),
-            ("Total", "cyan"),
-        ],
-        rows,
-    )
+    columns = [
+        ("Employee", "bold"),
+        ("Regular", "green"),
+        ("Overtime", "yellow"),
+        ("Double Time", "red"),
+        ("PTO", "blue"),
+        ("Total", "cyan"),
+    ]
+
+    if csv_output or output_file:
+        print_csv(columns, rows, file=output_file)
+        return
+
+    print_table(f"Payroll Report ({start} to {end})", columns, rows)
 
 
 @app.command("totals")
@@ -156,6 +161,8 @@ def current_totals(
     user: Optional[str] = typer.Option(None, "--user", help="User name or ID"),
     on_the_clock: bool = typer.Option(False, "--on-the-clock", help="Show only users currently clocked in"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    csv_output: bool = typer.Option(False, "--csv", help="Output as CSV"),
+    output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Write CSV to file"),
 ) -> None:
     """Get current period totals (hours worked this pay period).
 
@@ -165,8 +172,8 @@ def current_totals(
 
     Examples:
         tsheets reports totals
-        tsheets reports totals --user "Jane Smith"
-        tsheets reports totals --on-the-clock
+        tsheets reports totals --csv
+        tsheets reports totals -o totals.csv
     """
     payload: dict = {"data": {}}
     if user:
@@ -218,19 +225,21 @@ def current_totals(
             clock_status,
         ])
 
-    print_table(
-        "Current Period Totals",
-        [
-            ("Name", "bold"),
-            ("Regular", "green"),
-            ("Overtime", "yellow"),
-            ("Double Time", "red"),
-            ("PTO", "blue"),
-            ("Today", "cyan"),
-            ("On Clock", ""),
-        ],
-        rows,
-    )
+    columns = [
+        ("Name", "bold"),
+        ("Regular", "green"),
+        ("Overtime", "yellow"),
+        ("Double Time", "red"),
+        ("PTO", "blue"),
+        ("Today", "cyan"),
+        ("On Clock", ""),
+    ]
+
+    if csv_output or output_file:
+        print_csv(columns, rows, file=output_file)
+        return
+
+    print_table("Current Period Totals", columns, rows)
 
     # Print aggregate totals summary when showing multiple users
     agg = totals.get("totals", {})
@@ -248,6 +257,8 @@ def current_totals(
 def project_estimate(
     project: Optional[str] = typer.Option(None, "--project", help="Project name or ID (omit for all)"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    csv_output: bool = typer.Option(False, "--csv", help="Output as CSV"),
+    output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Write CSV to file"),
 ) -> None:
     """Get project estimate vs actual hours.
 
@@ -256,7 +267,7 @@ def project_estimate(
 
     Examples:
         tsheets reports project-estimate
-        tsheets reports project-estimate --project "Website Redesign"
+        tsheets reports project-estimate --csv
     """
     payload: dict = {"data": {}}
     if project:
@@ -295,23 +306,27 @@ def project_estimate(
             f"{pct:.0f}%",
         ])
 
-    print_table(
-        "Project Estimate vs Actual",
-        [
-            ("Project ID", "cyan"),
-            ("Project", "bold"),
-            ("Estimated", "blue"),
-            ("Actual", "green"),
-            ("% Complete", "yellow"),
-        ],
-        rows,
-    )
+    columns = [
+        ("Project ID", "cyan"),
+        ("Project", "bold"),
+        ("Estimated", "blue"),
+        ("Actual", "green"),
+        ("% Complete", "yellow"),
+    ]
+
+    if csv_output or output_file:
+        print_csv(columns, rows, file=output_file)
+        return
+
+    print_table("Project Estimate vs Actual", columns, rows)
 
 
 @app.command("current-all")
 def current_all(
     user: Optional[str] = typer.Option(None, "--user", help="User name or ID"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    csv_output: bool = typer.Option(False, "--csv", help="Output as CSV"),
+    output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Write CSV to file"),
 ) -> None:
     """Get current timesheets for all users (who's on the clock with details).
 
@@ -372,20 +387,22 @@ def current_all(
     # Sort: on-clock users first, then alphabetically
     rows.sort(key=lambda r: (0 if "On Clock" in r[1] else 1, r[0]))
 
-    print_table(
-        "Current All — Detailed Clock Status",
-        [
-            ("Name", "bold"),
-            ("Status", ""),
-            ("Jobcode", "cyan"),
-            ("Shift", "green"),
-            ("Day Total", "green"),
-            ("Regular", "green"),
-            ("Overtime", "yellow"),
-            ("PTO", "blue"),
-        ],
-        rows,
-    )
+    columns = [
+        ("Name", "bold"),
+        ("Status", ""),
+        ("Jobcode", "cyan"),
+        ("Shift", "green"),
+        ("Day Total", "green"),
+        ("Regular", "green"),
+        ("Overtime", "yellow"),
+        ("PTO", "blue"),
+    ]
+
+    if csv_output or output_file:
+        print_csv(columns, rows, file=output_file)
+        return
+
+    print_table("Current All — Detailed Clock Status", columns, rows)
 
 
 @app.command("project")
@@ -395,17 +412,17 @@ def project_report(
     end: Optional[str] = typer.Option(None, "--end", help="End date (YYYY-MM-DD)"),
     user: Optional[str] = typer.Option(None, "--user", help="User name or ID"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    csv_output: bool = typer.Option(False, "--csv", help="Output as CSV"),
+    output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Write CSV to file"),
 ) -> None:
     """Get project time report with per-user and per-jobcode breakdowns.
 
     Shows total hours spent on projects, broken down by user and jobcode.
-    The TSheets project report returns a nested structure:
-    project -> user -> jobcode -> time totals.
 
     Examples:
         tsheets reports project --start 2026-01-01 --end 2026-01-31
-        tsheets reports project --project "Office Build-Out" --start 2026-02-01 --end 2026-02-28
-        tsheets reports project --user "Jane Smith" --start 2026-03-01 --end 2026-03-06
+        tsheets reports project --start 2026-01-01 --end 2026-01-31 --csv
+        tsheets reports project --start 2026-01-01 --end 2026-01-31 -o project.csv
     """
     payload: dict = {"data": {}}
     if project:
@@ -536,18 +553,20 @@ def project_report(
     if start_date != "?" or end_date != "?":
         title = f"Project Report ({start_date} to {end_date})"
 
-    print_table(
-        title,
-        [
-            ("Project", "bold"),
-            ("User", ""),
-            ("Jobcode", "dim"),
-            ("Regular", "green"),
-            ("Overtime", "yellow"),
-            ("Total", "cyan bold"),
-        ],
-        rows,
-    )
+    columns = [
+        ("Project", "bold"),
+        ("User", ""),
+        ("Jobcode", "dim"),
+        ("Regular", "green"),
+        ("Overtime", "yellow"),
+        ("Total", "cyan bold"),
+    ]
+
+    if csv_output or output_file:
+        print_csv(columns, rows, file=output_file)
+        return
+
+    print_table(title, columns, rows)
 
     # Print grand total if there are multiple rows
     if len(rows) > 1 and grand_total_secs > 0:

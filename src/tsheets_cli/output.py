@@ -1,8 +1,11 @@
-"""Output formatting: Rich tables for humans, JSON for machines."""
+"""Output formatting: Rich tables for humans, JSON for machines, CSV for spreadsheets."""
 
 from __future__ import annotations
 
+import csv
+import io
 import json
+import re
 import sys
 from typing import Any
 
@@ -47,6 +50,43 @@ def print_table(
         table.add_row(*row)
 
     console.print(table)
+
+
+def _strip_rich_markup(text: str) -> str:
+    """Remove Rich markup tags like [bold], [green], [/], etc."""
+    return re.sub(r"\[/?[^\]]*\]", "", text)
+
+
+def print_csv(
+    columns: list[tuple[str, str]],
+    rows: list[list[str]],
+    file: str | None = None,
+) -> None:
+    """Print data as CSV to stdout or a file.
+
+    Strips Rich markup from cell values so the CSV is clean.
+
+    Args:
+        columns: List of (header, style) tuples
+        rows: List of row data (list of strings)
+        file: Optional file path to write to (prints to stdout if None)
+    """
+    headers = [h for h, _ in columns]
+    clean_rows = [[_strip_rich_markup(cell) for cell in row] for row in rows]
+
+    if file:
+        with open(file, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            writer.writerows(clean_rows)
+        Console(stderr=True).print(f"[green]Wrote {len(clean_rows)} rows to {file}[/]")
+    else:
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(headers)
+        writer.writerows(clean_rows)
+        sys.stdout.write(buf.getvalue())
+        sys.stdout.flush()
 
 
 def format_duration(seconds: int | None) -> str:
