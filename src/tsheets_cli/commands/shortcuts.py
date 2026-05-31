@@ -9,7 +9,7 @@ import typer
 
 from rich.console import Console
 
-from tsheets_cli.api import api_get, api_post, api_put, api_delete
+from tsheets_cli.api import api_get, api_post, api_put, api_delete, check_write_results
 from tsheets_cli.output import console, format_duration, print_json, print_table
 from tsheets_cli.resolve import resolve_jobcode, resolve_user
 
@@ -45,20 +45,25 @@ def clock_in(
     user_id = _get_current_user_id()
     jobcode_id = resolve_jobcode(jobcode)
 
-    # Check for existing active timer and stop it first
+    # Check for existing active timer and stop it first.
+    # A timer started yesterday (e.g. an overnight shift) is still "on the clock"
+    # today, so widen the window to yesterday rather than scoping to today only.
     today = datetime.now().strftime("%Y-%m-%d")
+    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
     existing = api_get("/timesheets", params={
         "user_ids": str(user_id),
-        "start_date": today,
+        "start_date": yesterday,
         "end_date": today,
         "on_the_clock": "yes",
     })
     active_timesheets = existing.get("results", {}).get("timesheets", {})
     if active_timesheets:
-        # Stop existing timer before starting a new one
+        # Stop existing timer before starting a new one. Abort the clock-in if
+        # the stop was rejected so we never stack two concurrent active timers.
         old_tid, old_ts = next(iter(active_timesheets.items()))
         now_stop = datetime.now(timezone.utc).isoformat()
-        api_put("/timesheets", {"data": [{"id": int(old_tid), "end": now_stop}]})
+        stop_result = api_put("/timesheets", {"data": [{"id": int(old_tid), "end": now_stop}]})
+        check_write_results(stop_result, "timesheets")
         if not json_output:
             duration = old_ts.get("duration", 0)
             console.print(
@@ -84,7 +89,7 @@ def clock_in(
         print_json(data)
         return
 
-    timesheets = data.get("results", {}).get("timesheets", {})
+    timesheets = check_write_results(data, "timesheets")
     if not timesheets:
         console.print("[bold red]Failed to create timer. Check API response.[/]")
         raise typer.Exit(1)
@@ -112,11 +117,13 @@ def clock_out(
     """
     user_id = _get_current_user_id()
 
-    # Find active timesheet (on_the_clock)
+    # Find active timesheet (on_the_clock). Include yesterday so an overnight
+    # shift started the previous day can still be clocked out.
     today = datetime.now().strftime("%Y-%m-%d")
+    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
     data = api_get("/timesheets", params={
         "user_ids": str(user_id),
-        "start_date": today,
+        "start_date": yesterday,
         "end_date": today,
         "on_the_clock": "yes",
     })
@@ -156,7 +163,8 @@ def clock_out(
         print_json(result)
         return
 
-    updated = result.get("results", {}).get("timesheets", {})
+    # Exits non-zero if the API rejected the stop at the item level.
+    updated = check_write_results(result, "timesheets")
     if updated:
         for ut_id, ut in updated.items():
             duration = ut.get("duration", 0)
@@ -171,8 +179,12 @@ def clock_out(
             console.print(f"[green bold]Clocked out![/] Timer ID: {ut_id}")
             console.print(f"[dim]Jobcode: {jc_name} | Duration: {format_duration(duration)}[/]")
     else:
-        console.print(f"[green bold]Clocked out![/] Timer ID: {tid}")
-        console.print(f"[dim]Approximate duration: {format_duration(elapsed)}[/]")
+        # No item came back and none was flagged failed: don't claim success.
+        console.print(
+            f"[bold red]Clock-out may not have completed[/] for timer ID {tid}.\n"
+            "[yellow]The API returned no updated entry. Run 'tsheets today' to verify.[/]"
+        )
+        raise typer.Exit(1)
 
 
 def today(

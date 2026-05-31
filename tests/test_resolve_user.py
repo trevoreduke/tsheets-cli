@@ -61,7 +61,11 @@ class TestResolveUserExactMatch:
     def test_exact_match_case_insensitive(self, mock_get):
         result = resolve_user("trevor duke")
         assert result == 101
-        mock_get.assert_called_once_with("/users", params={"active": "both"})
+        # resolve_user paginates, so the first (and here only) page is requested
+        # with page=1 alongside the active filter.
+        mock_get.assert_called_once_with(
+            "/users", params={"active": "both", "page": 1}
+        )
 
     @patch("tsheets_cli.resolve.api_get", return_value=MOCK_USERS_RESPONSE)
     def test_exact_match_preserves_case(self, mock_get):
@@ -132,3 +136,67 @@ class TestResolveUserWhitespace:
     def test_leading_trailing_whitespace_stripped(self, mock_get):
         result = resolve_user("  Trevor Duke  ")
         assert result == 101
+
+
+class TestResolveUserPagination:
+    """Users beyond the first page are still resolvable."""
+
+    # Page 1: 50-user limit reached, "more" is True. The target user lives on
+    # page 2, so a single un-paginated request would silently fail to find them.
+    PAGE_ONE = {
+        "results": {
+            "users": {
+                "201": {
+                    "id": 201,
+                    "first_name": "Alice",
+                    "last_name": "Anderson",
+                    "active": True,
+                }
+            }
+        },
+        "more": True,
+    }
+    PAGE_TWO = {
+        "results": {
+            "users": {
+                "202": {
+                    "id": 202,
+                    "first_name": "Bob",
+                    "last_name": "Builder",
+                    "active": True,
+                }
+            }
+        },
+        "more": False,
+    }
+
+    @patch("tsheets_cli.resolve.api_get")
+    def test_resolves_user_on_second_page(self, mock_get):
+        mock_get.side_effect = [self.PAGE_ONE, self.PAGE_TWO]
+        result = resolve_user("Bob Builder")
+        assert result == 202
+        # Both pages must have been fetched.
+        assert mock_get.call_count == 2
+        mock_get.assert_any_call("/users", params={"active": "both", "page": 1})
+        mock_get.assert_any_call("/users", params={"active": "both", "page": 2})
+
+    @patch("tsheets_cli.resolve.api_get")
+    def test_stops_paginating_when_more_false(self, mock_get):
+        # When the first page already reports more=False, no second request.
+        single_page = {
+            "results": {
+                "users": {
+                    "203": {
+                        "id": 203,
+                        "first_name": "Carol",
+                        "last_name": "Carter",
+                        "active": True,
+                    }
+                }
+            },
+            "more": False,
+        }
+        mock_get.return_value = single_page
+        result = resolve_user("Carol Carter")
+        assert result == 203
+        assert mock_get.call_count == 1

@@ -6,7 +6,7 @@ from typing import Optional
 
 import typer
 
-from tsheets_cli.api import api_get, api_post
+from tsheets_cli.api import api_get, api_post, check_write_results
 from tsheets_cli.output import console, format_date, format_duration, print_json, print_table
 from tsheets_cli.resolve import resolve_jobcode, resolve_user
 
@@ -135,7 +135,7 @@ def create_timesheet(
         print_json(data)
         return
 
-    timesheets = data.get("results", {}).get("timesheets", {})
+    timesheets = check_write_results(data, "timesheets")
     for tid, ts in timesheets.items():
         status = ts.get("_status_extra", "")
         console.print(f"[green]Timesheet created:[/] ID {tid}")

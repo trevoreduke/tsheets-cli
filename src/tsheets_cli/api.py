@@ -214,6 +214,47 @@ def _handle_network_errors(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
         sys.exit(1)
 
 
+def check_write_results(data: dict[str, Any], object_name: str) -> dict[str, Any]:
+    """Validate per-item status on a write (POST/PUT) response and return the items.
+
+    The TSheets API returns HTTP 200 for batch writes even when individual
+    items fail; each returned object carries a ``_status_code`` (2xx = success)
+    and a human-readable ``_status_message`` / ``_status_extra``. Callers that
+    only look at ``results`` therefore report success for items the API
+    actually rejected (e.g. an overlapping clock-in).
+
+    This inspects every item, prints the API's message for any non-2xx item,
+    and exits non-zero if any item failed. On success it returns the
+    ``results.<object_name>`` dict so callers can render confirmation output.
+
+    Args:
+        data: The parsed write response.
+        object_name: The results key to inspect (e.g. "timesheets",
+            "time_off_requests").
+
+    Returns:
+        The ``results.<object_name>`` mapping (item_id -> item dict).
+
+    Raises:
+        SystemExit: If any item has a non-2xx ``_status_code``.
+    """
+    items = data.get("results", {}).get(object_name, {})
+    failed = False
+    for _item_id, item in items.items():
+        status_code = item.get("_status_code")
+        # Treat only explicit 2xx codes as success; a missing code on a
+        # returned object is assumed OK for backward compatibility.
+        if status_code is not None and not 200 <= int(status_code) <= 299:
+            message = item.get("_status_message") or "Unknown error"
+            extra = item.get("_status_extra")
+            detail = f": {extra}" if extra else ""
+            console.print(f"[bold red]API rejected {object_name} write ({status_code}):[/] {message}{detail}")
+            failed = True
+    if failed:
+        sys.exit(1)
+    return items
+
+
 def api_get(endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
     """Make a GET request to the TSheets API."""
     def _do_request() -> dict[str, Any]:

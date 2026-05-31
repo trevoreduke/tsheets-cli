@@ -21,6 +21,39 @@ def _is_numeric(value: str) -> bool:
         return False
 
 
+def _fetch_all(endpoint: str, results_key: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Fetch every page of a paginated list endpoint and merge the results.
+
+    The TSheets list endpoints return at most 50 objects per page and set
+    ``"more": true`` while further pages remain. A single un-paginated request
+    therefore silently drops entities in any org with more than 50 of them,
+    causing name lookups to fail. This loops until the API reports no more
+    pages.
+
+    Args:
+        endpoint: API path, e.g. "/users".
+        results_key: Key under ``results`` to merge, e.g. "users".
+        params: Extra query params (``page`` is managed here).
+
+    Returns:
+        Merged dict of id -> object across all pages.
+    """
+    merged: dict[str, Any] = {}
+    page = 1
+    while True:
+        page_params: dict[str, Any] = dict(params or {})
+        page_params["page"] = page
+        data = api_get(endpoint, params=page_params)
+        objects = data.get("results", {}).get(results_key, {})
+        if not objects:
+            break
+        merged.update(objects)
+        if not data.get("more", False):
+            break
+        page += 1
+    return merged
+
+
 def resolve_user(name_or_id: str) -> int:
     """Resolve a user name (or numeric ID) to a user ID.
 
@@ -29,8 +62,7 @@ def resolve_user(name_or_id: str) -> int:
     if _is_numeric(name_or_id):
         return int(name_or_id)
 
-    data = api_get("/users", params={"active": "both"})
-    users = data.get("results", {}).get("users", {})
+    users = _fetch_all("/users", "users", params={"active": "both"})
 
     search = name_or_id.strip().lower()
     matches: list[tuple[int, str]] = []
@@ -151,8 +183,7 @@ def resolve_project(name_or_id: str) -> int:
     if _is_numeric(name_or_id):
         return int(name_or_id)
 
-    data = api_get("/projects", params={"active": "both"})
-    projects = data.get("results", {}).get("projects", {})
+    projects = _fetch_all("/projects", "projects", params={"active": "both"})
 
     search = name_or_id.strip().lower()
     matches: list[tuple[int, str]] = []

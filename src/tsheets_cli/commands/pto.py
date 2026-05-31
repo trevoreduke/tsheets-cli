@@ -8,7 +8,7 @@ from typing import Optional
 import typer
 from rich.panel import Panel
 
-from tsheets_cli.api import api_get, api_post
+from tsheets_cli.api import api_get, api_post, check_write_results
 from tsheets_cli.output import console, format_duration, print_json, print_table
 from tsheets_cli.resolve import resolve_user
 
@@ -287,7 +287,8 @@ def create_pto_request(
         return
 
     # ── Confirmation output ─────────────────────────────────────────
-    results = data.get("results", {}).get("time_off_requests", {})
+    # Surface any per-item API rejection (HTTP 200 can still carry a failed item).
+    results = check_write_results(data, "time_off_requests")
 
     if not results:
         console.print("[bold red]PTO request may not have been created.[/]")
